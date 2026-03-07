@@ -36,8 +36,9 @@ export class FormComponent implements OnInit {
   submitForm() {
     console.log('Submit Clicked');
     const user = this.userForm.value;
-    this.syncService.submitUser(user);
-    this.loadUsers();
+    this.syncService.submitUser(user).subscribe(() => {
+      this.loadUsers();
+    });
     this.userForm.reset();
   }
 

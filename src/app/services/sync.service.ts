@@ -3,7 +3,7 @@ import { ApiService } from './api.service';
 import { IndexeddbService } from './indexeddb.service';
 import { User } from '../models/user.model';
 import { from, of } from 'rxjs';
-import { switchMap, mergeMap, toArray, tap } from 'rxjs/operators';
+import { switchMap, mergeMap, toArray, tap, catchError } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root',
@@ -15,18 +15,19 @@ export class SyncService {
   ) {}
 
   submitUser(user: User) {
-    this.apiService.addUser(user).subscribe({
-      next: () => {
-        console.log('Saved to server');
-      },
-      error: () => {
-        console.log('Server failed -> saving offline');
+    if (!navigator.onLine) {
+      console.log('Offline → saving to IndexedDB');
 
-        this.indexeddbService.addUser(user).subscribe(() => {
-          console.log('Saved to IndexedDb');
-        });
-      },
-    });
+      return this.indexeddbService.addUser(user);
+    }
+
+    return this.apiService.addUser(user).pipe(
+      catchError(() => {
+        console.log('Server failed → saving offline');
+
+        return this.indexeddbService.addUser(user);
+      }),
+    );
   }
 
   syncOfflineUsers() {
