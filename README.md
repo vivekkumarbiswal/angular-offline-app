@@ -503,7 +503,7 @@ Offline submissions stored locally and synced later.
 
 # Author
 
-**Vivek Biswal**
+**Vivek Kumar Biswal**
 
 Angular Developer | Offline-First PWA Example Project
 
