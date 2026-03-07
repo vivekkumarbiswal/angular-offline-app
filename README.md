@@ -1,14 +1,12 @@
 # Angular Offline-First PWA (Form Sync Example)
 
-This project demonstrates an **offline-first Angular application** using:
+This project demonstrates an **offline-first Angular application** with the following capabilities:
 
-* Angular Reactive Forms
-* IndexedDB (via **ngx-indexed-db**)
-* Sync service for retrying offline requests
-* Mock backend using **json-server**
-
-When the application is **online**, form data is sent to the server.
-When the application is **offline**, form data is stored locally in **IndexedDB** and automatically synced when the internet connection returns.
+* Submit form data to a backend API when **online**
+* Store form data in **IndexedDB** when **offline**
+* Automatically **sync offline data** when internet returns
+* Cache the **application shell and API responses** using a PWA Service Worker
+* Load the **entire application offline**
 
 ---
 
@@ -16,9 +14,80 @@ When the application is **offline**, form data is stored locally in **IndexedDB*
 
 * Angular
 * Reactive Forms
-* ngx-indexed-db
 * RxJS
+* ngx-indexed-db
 * json-server
+* Angular Service Worker (PWA)
+
+---
+# Architecture Diagram
+
+The following diagram shows how the different layers of the application interact.
+
+                    +--------------------+
+                    |    Angular UI      |
+                    |  (Reactive Form)   |
+                    +---------+----------+
+                              |
+                              |
+                              v
+                    +--------------------+
+                    |    Sync Service    |
+                    | (Offline-first     |
+                    |   controller)      |
+                    +---------+----------+
+                              |
+               +--------------+---------------+
+               |                              |
+               v                              v
+
+      +--------------------+        +--------------------+
+      |     Api Service     |        |  IndexedDB Service |
+      |  HTTP Requests      |        | Offline Storage    |
+      +----------+----------+        +----------+---------+
+                 |                              |
+                 v                              v
+
+        +---------------+             +-------------------+
+        |   json-server |             |     IndexedDB     |
+        |  REST API     |             |  offlineUsers     |
+        +---------------+             +-------------------+
+# Offline Sync Flow
+User submits form
+        |
+        v
+SyncService.submitUser()
+        |
+        |------ Internet Available ------|
+        |                                |
+        v                                v
+POST /users                        Save in IndexedDB
+(json-server)                     (offline queue)
+        |
+        v
+UI refresh
+
+
+# Internet Recovery Flow
+Internet Connection Restored
+        |
+        v
+window "online" event
+        |
+        v
+syncOfflineUsers()
+        |
+        v
+Read IndexedDB records
+        |
+        v
+POST records to server
+        |
+        v
+Clear IndexedDB
+        |
+        v
+Refresh UI
 
 ---
 
@@ -41,34 +110,51 @@ src/app
 │     user.model.ts
 ```
 
-### Responsibilities
+---
 
-**FormComponent**
+# Responsibilities
+
+### FormComponent
 
 * Handles UI
 * Submits form data
 * Displays users list
+* Listens for online events
 
-**ApiService**
+### ApiService
 
-* Communicates with the backend API
+Handles API communication:
 
-**IndexeddbService**
+```
+GET /users
+POST /users
+```
 
-* Stores offline data in IndexedDB
+### IndexeddbService
 
-**SyncService**
+Stores offline records in IndexedDB.
 
-* Decides where data goes:
+### SyncService
 
-  * API (if online)
-  * IndexedDB (if offline)
+Controls the **offline-first logic**:
+
+```
+Try API
+↓
+If API fails
+↓
+Store data in IndexedDB
+↓
+When internet returns
+↓
+Sync IndexedDB data to server
+```
 
 ---
 
-# How the Application Works
+# Application Flow
 
-### When Online
+## When Online
 
 ```
 User submits form
@@ -82,19 +168,23 @@ Server stores data
 UI refreshes
 ```
 
-### When Offline
+---
+
+## When Offline
 
 ```
 User submits form
         ↓
 API request fails
         ↓
-SyncService stores data
+SyncService saves data
         ↓
 IndexedDB
 ```
 
-### When Internet Returns
+---
+
+## When Internet Returns
 
 ```
 online event detected
@@ -112,7 +202,7 @@ Refresh UI
 
 # Installation
 
-Clone the repository and install dependencies.
+Clone the project and install dependencies:
 
 ```
 npm install
@@ -130,13 +220,13 @@ npm install json-server --save-dev
 
 # Create Database File
 
-Create a file in the root directory:
+Create:
 
 ```
 db.json
 ```
 
-Add the following content:
+Add:
 
 ```
 {
@@ -146,15 +236,15 @@ Add the following content:
 
 ---
 
-# Start the Backend Server
+# Start Backend Server
 
-Run the mock API server:
+Run:
 
 ```
 npx json-server --watch db.json --port 3000
 ```
 
-The API will be available at:
+API will be available at:
 
 ```
 http://localhost:3000/users
@@ -162,28 +252,160 @@ http://localhost:3000/users
 
 ---
 
-# Start the Angular Application
-
-Run the Angular development server:
+# Start Angular Application (Development Mode)
 
 ```
 ng serve
 ```
 
-Open the application:
+Open:
 
 ```
 http://localhost:4200
+```
+
+Note:
+Service workers **do not work in ng serve**.
+
+---
+
+# Enable PWA (Service Worker)
+
+Install Angular PWA support:
+
+```
+ng add @angular/pwa
+```
+
+Angular automatically:
+
+* installs service worker
+* creates `ngsw-config.json`
+* updates `app.module.ts`
+* adds `manifest.webmanifest`
+* adds icons
+
+---
+
+# Service Worker Configuration
+
+File:
+
+```
+ngsw-config.json
+```
+
+Example configuration:
+
+```
+{
+  "$schema": "./node_modules/@angular/service-worker/config/schema.json",
+  "index": "/index.html",
+
+  "assetGroups": [
+    {
+      "name": "app",
+      "installMode": "prefetch",
+      "resources": {
+        "files": [
+          "/index.html",
+          "/*.css",
+          "/*.js"
+        ]
+      }
+    },
+
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "resources": {
+        "files": [
+          "/assets/**"
+        ]
+      }
+    }
+  ],
+
+  "dataGroups": [
+    {
+      "name": "api-users",
+      "urls": [
+        "http://localhost:3000/users"
+      ],
+      "cacheConfig": {
+        "strategy": "freshness",
+        "maxSize": 20,
+        "maxAge": "1d",
+        "timeout": "5s"
+      }
+    }
+  ]
+}
+```
+
+---
+
+# Build the PWA
+
+Run:
+
+```
+ng build
+```
+
+Angular will create:
+
+```
+dist/<project-name>
+```
+
+---
+
+# Serve Production Build
+
+Use a static server:
+
+```
+npx http-server dist/<project-name>
+```
+
+Example:
+
+```
+npx http-server dist/offline-form-app
+```
+
+Open:
+
+```
+http://localhost:8080
+```
+
+---
+
+# Verify Service Worker
+
+Open DevTools:
+
+```
+Application → Service Workers
+```
+
+You should see:
+
+```
+ngsw-worker.js
+status: activated
 ```
 
 ---
 
 # Testing Offline Functionality
 
-### Test Online Mode
+## Test Online Mode
 
-1. Start both Angular and json-server.
-2. Submit the form.
+1. Start Angular and json-server
+2. Submit the form
 3. Data should appear in:
 
 ```
@@ -192,17 +414,17 @@ http://localhost:3000/users
 
 ---
 
-### Test Offline Mode
+## Test Offline Mode
 
 1. Open Chrome DevTools
-2. Go to **Network Tab**
-3. Enable **Offline Mode**
+2. Go to **Network**
+3. Enable **Offline**
 
 Submit the form.
 
-The data will be stored in **IndexedDB**.
+Data will be saved in IndexedDB.
 
-To verify:
+Verify:
 
 ```
 DevTools
@@ -214,26 +436,74 @@ DevTools
 
 ---
 
-### Test Sync When Internet Returns
+## Test Sync When Internet Returns
 
-1. Disable Offline Mode in DevTools.
-2. The `online` event will trigger synchronization.
-3. Offline records will be sent to the server.
-4. IndexedDB will be cleared.
-5. UI will refresh automatically.
+1. Disable Offline Mode
+2. Browser triggers `online` event
+3. Offline records sync to server
+4. IndexedDB clears
+5. UI refreshes automatically
+
+---
+
+# Test PWA Offline Loading
+
+1. Load the application once **online**
+2. Open DevTools
+3. Go to **Network**
+4. Enable **Offline**
+5. Refresh the page
+
+The **app should still load**.
+
+---
+
+# Offline Layers in This Project
+
+### Layer 1 — PWA Service Worker
+
+Caches:
+
+```
+HTML
+JS
+CSS
+Assets
+```
+
+App loads offline.
+
+---
+
+### Layer 2 — API Response Cache
+
+```
+GET /users
+```
+
+Returns cached data if network fails.
+
+---
+
+### Layer 3 — IndexedDB Queue
+
+Offline submissions stored locally and synced later.
 
 ---
 
 # Future Improvements
 
-* Add Angular Service Worker for full PWA support
-* Cache API responses
-* Add retry strategy for failed sync
-* Add background sync support
-* Show sync status in UI
+* Background Sync API
+* Offline status indicator
+* Sync progress UI
+* Retry strategy for failed requests
+* Conflict resolution logic
 
 ---
 
 # Author
 
-Offline-First Angular Example Project
+**Vivek Biswal**
+
+Angular Developer | Offline-First PWA Example Project
+
