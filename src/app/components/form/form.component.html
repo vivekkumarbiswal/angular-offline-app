@@ -1,20 +1,80 @@
-<h2>User Form</h2>
-<form [formGroup]="userForm" (ngSubmit)="submitForm()">
-  <label>Name: </label>
-  <input type="text" formControlName="name" />
+<div class="main-container">
+  <header class="app-header">
+    <div class="status-bar">
+      <div class="logo">
+        <h1>OfflineSync</h1>
+      </div>
 
-  <br /><br />
+      <div class="indicators">
+        <div class="sync-status" *ngIf="isSyncing">
+          <span class="spinner"></span>
+          Syncing...
+        </div>
+        <div [class]="'network-badge ' + (isOnline ? 'online' : 'offline')">
+          <span class="dot"></span>
+          {{ isOnline ? 'Online' : 'Offline' }}
+        </div>
+      </div>
+    </div>
+  </header>
 
-  <label>Email: </label>
-  <input type="text" formControlName="email" />
+  <main class="content-grid">
+    <section class="form-section">
+      <div class="card form-card">
+        <h2>Submit New User</h2>
+        <p class="subtitle">Data will sync automatically when you're online.</p>
 
-  <br /><br />
+        <form [formGroup]="userForm" (ngSubmit)="submitForm()">
+          <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" formControlName="name" placeholder="John Doe"
+              [class.invalid]="userForm.get('name')?.invalid && userForm.get('name')?.touched" />
+            <span class="error-text" *ngIf="userForm.get('name')?.invalid && userForm.get('name')?.touched">
+              Name is required (min 2 chars).
+            </span>
+          </div>
 
-  <button type="submit">Submit</button>
-</form>
-<br /><br />
-<hr />
-<br /><br />
-<ul>
-  <li *ngFor="let user of users">{{ user.name }} - {{ user.email }}</li>
-</ul>
+          <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" formControlName="email" placeholder="john@example.com"
+              [class.invalid]="userForm.get('email')?.invalid && userForm.get('email')?.touched" />
+            <span class="error-text" *ngIf="userForm.get('email')?.invalid && userForm.get('email')?.touched">
+              Please enter a valid email address.
+            </span>
+          </div>
+
+          <button type="submit" [disabled]="userForm.invalid || isSyncing" class="btn-primary">
+            <span>{{ isSyncing ? 'Processing...' : 'Submit Records' }}</span>
+          </button>
+        </form>
+      </div>
+
+      <div class="offline-alert" *ngIf="!isOnline">
+        <span class="icon">💡</span>
+        <p>You are currently offline. New data will be stored locally and synced when connection returns.</p>
+      </div>
+    </section>
+
+    <section class="list-section">
+      <div class="section-header">
+        <h3>Recent Submissions</h3>
+        <span class="count">{{ users.length }} synced users</span>
+      </div>
+
+      <div class="user-list">
+        <div class="user-card" *ngFor="let user of users; let i = index" [style.animation-delay]="i * 0.1 + 's'">
+          <div class="avatar">{{ user.name.charAt(0).toUpperCase() }}</div>
+          <div class="user-info">
+            <p class="name">{{ user.name }}</p>
+            <p class="email">{{ user.email }}</p>
+          </div>
+          <div class="check-icon">✓</div>
+        </div>
+
+        <div class="empty-state" *ngIf="users.length === 0">
+          <p>No synced users found.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
